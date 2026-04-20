@@ -5,13 +5,13 @@ import pvlib
 import numpy as np
 
 # --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Analizador Solar UTN - Resistencia", layout="wide")
+st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
 LATITUD = -27.45
 LONGITUD = -58.98
 ZONA_HORARIA = 'America/Argentina/Cordoba'
 
-st.title("☀️ Carta Solar Cilíndrica - UTN FRRe")
+st.title("☀️ Carta Solar Interactiva - UTN FRRe")
 
 # --- ESTADO DE LA SESIÓN (Base de datos de sombras) ---
 if 'sombras' not in st.session_state:
