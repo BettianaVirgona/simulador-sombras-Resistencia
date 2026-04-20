@@ -5,13 +5,13 @@ import pvlib
 import numpy as np
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Carta Solar UTN - Colector A", layout="wide")
+st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
 LATITUD = -27.45
 LONGITUD = -58.98
 ZONA_HORARIA = 'America/Argentina/Cordoba'
 
-st.title("☀️ Carta Solar Cilíndrica - Colector A")
+st.title("☀️ Carta Solar Interactiva - Resistencia, Chaco")
 
 if 'sombras' not in st.session_state:
     st.session_state.sombras = []
