@@ -4,123 +4,103 @@ import plotly.graph_objects as go
 import pvlib
 import numpy as np
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="App Solar Interactiva - Resistencia", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Carta Solar - UTN FRRe", layout="wide")
 
-# Datos de Resistencia, Chaco
+# Datos fijos para Resistencia
 LATITUD = -27.45
 LONGITUD = -58.98
 ZONA_HORARIA = 'America/Argentina/Cordoba'
 
-st.title("☀️ Carta Solar Interactiva: Resistencia, Chaco")
-st.markdown("Configurá tus propios obstáculos y visualizá la trayectoria solar.")
+st.title("☀️ Carta Solar Cilíndrica - Analizador de Sombras")
 
-# --- ESTADO DE LA SESIÓN (Para guardar sombras) ---
+# --- ESTADO DE LA SESIÓN ---
 if 'sombras' not in st.session_state:
     st.session_state.sombras = []
 
-# --- SIDEBAR: GESTIÓN DE SOMBRAS ---
-st.sidebar.header("📂 Gestión de Sombras")
+# --- SIDEBAR ---
+st.sidebar.header("📐 Configuración de Escena")
 
-with st.sidebar.expander("➕ Agregar Nueva Sombra", expanded=True):
-    nombre_obj = st.text_input("Nombre del objeto", placeholder="Ej: Árbol, Edificio...")
-    
-    # Rango de Azimut de -180 a 180
+with st.sidebar.expander("Añadir Obstáculo", expanded=True):
+    nombre = st.text_input("Etiqueta", "Edificio")
     col1, col2 = st.columns(2)
     with col1:
-        az_inicio = st.number_input("Azimut Inicio (°)", min_value=-180, max_value=180, value=-45)
+        az_in = st.number_input("Azimut Inicial", value=-90)
     with col2:
-        az_fin = st.number_input("Azimut Fin (°)", min_value=-180, max_value=180, value=45)
-        
-    alt_obj = st.number_input("Ángulo de Elevación (°)", min_value=0, max_value=90, value=20)
+        az_fi = st.number_input("Azimut Final", value=-60)
+    alt_h = st.number_input("Altura (Elevación)", value=30)
     
-    if st.button("Guardar Objeto"):
-        if nombre_obj:
-            st.session_state.sombras.append({
-                "nombre": nombre_obj,
-                "az_range": (az_inicio, az_fin),
-                "alt": alt_obj
-            })
-            st.rerun()
-        else:
-            st.error("Por favor, ponele un nombre al objeto.")
+    if st.button("Agregar a la Carta"):
+        st.session_state.sombras.append({"nom": nombre, "az": (az_in, az_fi), "alt": alt_h})
+        st.rerun()
 
-if st.sidebar.button("🗑️ Borrar todas las sombras"):
+if st.sidebar.button("Limpiar todo"):
     st.session_state.sombras = []
     st.rerun()
 
-# --- CÁLCULOS SOLARES ---
+# --- CÁLCULO DE TRAYECTORIAS (LOS 12 MESES) ---
 @st.cache_data
-def obtener_datos_resistencia(lat, lon):
-    # Generamos datos para solsticios y equinoccios
-    fechas = ['2024-06-21', '2024-09-21', '2024-12-21']
-    etiquetas = ['Solsticio Invierno', 'Equinoccio', 'Solsticio Verano']
-    colores = ['#1f77b4', '#2ca02c', '#ff7f0e']
+def generar_curvas_meses(lat, lon):
+    meses_nombres = ['Ene (21)', 'Feb (21)', 'Mar (21)', 'Abr (21)', 'May (21)', 'Jun (21)',
+                     'Jul (21)', 'Ago (21)', 'Sep (21)', 'Oct (21)', 'Nov (21)', 'Dic (21)']
+    colores = ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', 
+               '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94']
     
-    resultados = []
-    for fecha, etiqueta, color in zip(fechas, etiquetas, colores):
-        tiempos = pd.date_range(start=f'{fecha} 06:00', end=f'{fecha} 20:00', freq='10min', tz=ZONA_HORARIA)
+    lineas = []
+    for i, nombre in enumerate(meses_nombres):
+        fecha = f'2024-{i+1:02d}-21'
+        tiempos = pd.date_range(start=f'{fecha} 05:00', end=f'{fecha} 20:00', freq='10min', tz=ZONA_HORARIA)
         sol = pvlib.solarposition.get_solarposition(tiempos, lat, lon)
         sol = sol[sol['elevation'] > 0]
         
-        # CONVERSIÓN DE AZIMUT: pvlib usa 0=Norte, 180=Sur. 
-        # Para pasar a rango -180 a 180 donde 0 es el Sur:
-        sol['az_plot'] = sol['azimuth'] - 180
+        # Ajuste de Azimut: pvlib (180=Sur) -> Queremos 0=Sur? 
+        # En tu imagen: -180=Sur, -90=Este, 0=Norte, 90=Oeste, 180=Sur
+        # Calculamos según la escala de tu imagen:
+        az_plot = sol['azimuth'] - 180 
         
-        sol['etiqueta'] = etiqueta
-        sol['color'] = color
-        resultados.append(sol)
-    return resultados
+        lineas.append({'x': az_plot, 'y': sol['elevation'], 'nom': nombre, 'col': colores[i]})
+    return lineas
 
-trayectorias = obtener_datos_resistencia(LATITUD, LONGITUD)
+curvas = generar_curvas_meses(LATITUD, LONGITUD)
 
-# --- GRÁFICO INTERACTIVO ---
+# --- GRÁFICO ---
 fig = go.Figure()
 
-# 1. Dibujar Sombras del Usuario
+# 1. Dibujar Sombras
 for s in st.session_state.sombras:
-    az_min, az_max = s["az_range"]
-    alt = s["alt"]
-    
     fig.add_trace(go.Scatter(
-        x=[az_min, az_min, az_max, az_max, az_min],
-        y=[0, alt, alt, 0, 0],
-        fill="toself",
-        name=s["nombre"],
-        opacity=0.5,
-        line=dict(width=1)
+        x=[s['az'][0], s['az'][0], s['az'][1], s['az'][1], s['az'][0]],
+        y=[0, s['alt'], s['alt'], 0, 0],
+        fill="toself", name=s['nom'], opacity=0.6,
+        line=dict(width=1, color="black")
     ))
 
-# 2. Dibujar Trayectorias Solares
-for df in trayectorias:
+# 2. Dibujar las curvas de los meses
+for c in curvas:
     fig.add_trace(go.Scatter(
-        x=df['az_plot'],
-        y=df['elevation'],
-        mode='lines',
-        name=df['etiqueta'].iloc[0],
-        line=dict(color=df['color'].iloc[0], width=3)
+        x=c['x'], y=c['y'], mode='lines',
+        name=c['nom'], line=dict(color=c['col'], width=2.5)
     ))
 
-# 3. Configuración de Ejes
+# 3. ESTÉTICA IGUAL A TU IMAGEN (Eje X de 30 en 30)
 fig.update_layout(
     xaxis=dict(
-        title="Azimut Solar [°] (0° = Sur)",
+        title="Acimut Solar [°] (-180=Sur, -90=Este, 0=Norte, 90=Oeste, 180=Sur)",
         range=[-180, 180],
-        tickvals=[-180, -135, -90, -45, 0, 45, 90, 135, 180],
-        ticktext=['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO', 'N']
+        dtick=30, # Divisiones cada 30 grados
+        gridcolor='lightgray',
+        zerolinecolor='black'
     ),
-    yaxis=dict(title="Elevación Solar [°]", range=[0, 90]),
+    yaxis=dict(
+        title="Elevación Solar [°]",
+        range=[0, 90],
+        dtick=10,
+        gridcolor='lightgray'
+    ),
     template="plotly_white",
-    height=650,
-    hovermode="closest"
+    height=700,
+    legend=dict(title="Meses (21)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
+    margin=dict(l=50, r=150, t=50, b=50)
 )
 
 st.plotly_chart(fig, use_container_width=True)
-
-# --- LISTADO DE OBJETOS ---
-if st.session_state.sombras:
-    st.subheader("📋 Objetos en la Escena")
-    st.table(pd.DataFrame([
-        {"Nombre": s["nombre"], "Azimut": f"{s['az_range'][0]}° a {s['az_range'][1]}°", "Altura": f"{s['alt']}°"} 
-        for s in st.session_state.sombras
-    ]))
