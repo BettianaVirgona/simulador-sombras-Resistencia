@@ -13,7 +13,7 @@ LONGITUD = -58.98
 ZONA_HORARIA = 'America/Argentina/Cordoba'
 
 st.title("☀️ Carta Solar Cilíndrica Interactiva - UTN FRRe")
-st.markdown("Análisis de trayectorias solares con múltiples obstáculos de colores.")
+st.markdown("Análisis de sombras para un panel solar ubicado en UTN FRRe, Edificio Anexo")
 
 # --- ESTADO DE LA SESIÓN (Base de datos de sombras) ---
 if 'sombras' not in st.session_state:
