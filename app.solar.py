@@ -7,7 +7,6 @@ import numpy as np
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
-# Datos geográficos de Resistencia, Chaco
 LATITUD = -27.45
 LONGITUD = -58.98
 ZONA_HORARIA = 'America/Argentina/Cordoba'
@@ -15,7 +14,7 @@ ZONA_HORARIA = 'America/Argentina/Cordoba'
 st.title("☀️ Carta Solar Cilíndrica Interactiva - UTN FRRe")
 st.markdown("Análisis de sombras para un panel solar ubicado en Resistencia-Chaco")
 
-# --- ESTADO DE LA SESIÓN (Base de datos de sombras) ---
+# --- ESTADO DE LA SESIÓN ---
 if 'sombras' not in st.session_state:
     st.session_state.sombras = {}
 
@@ -37,10 +36,7 @@ with st.sidebar.expander("➕ Añadir Nueva Sombra", expanded=True):
             st.error("Ese nombre ya existe.")
         else:
             altura_final = h2 if h2 > 0 else h1
-            st.session_state.sombras[nombre_nueva] = {
-                "az": (az_in, az_fi),
-                "h": (h1, altura_final)
-            }
+            st.session_state.sombras[nombre_nueva] = {"az": (az_in, az_fi), "h": (h1, altura_final)}
             st.rerun()
 
 if st.session_state.sombras:
@@ -60,7 +56,7 @@ if st.session_state.sombras:
 # --- CÁLCULOS ---
 @st.cache_data
 def obtener_datos(lat, lon):
-    tiempos = pd.date_range(start='2024-01-01', end='2024-12-31 23:55', freq='5min', tz=ZONA_MINERIA if 'ZONA_MINERIA' in locals() else ZONA_HORARIA)
+    tiempos = pd.date_range(start='2024-01-01', end='2024-12-31 23:55', freq='10min', tz=ZONA_HORARIA)
     sol = pvlib.solarposition.get_solarposition(tiempos, lat, lon)
     sol = sol[sol['elevation'] > 0]
     sol['az_plot'] = np.where(sol['azimuth'] > 180, sol['azimuth'] - 360, sol['azimuth'])
@@ -73,18 +69,13 @@ df_total = obtener_datos(LATITUD, LONGITUD)
 # --- GRÁFICO ---
 fig = go.Figure()
 
-# DEFINICIÓN DE PALETA DE COLORES PARA SOMBRAS
-# Usamos RGBA para que tengan una transparencia linda y no tapen totalmente los analemas
 paleta_colores = [
-    'rgba(100, 100, 100, 0.5)', # Gris oscuro
-    'rgba(46, 125, 50, 0.5)',   # Verde bosque (ideal para árboles)
-    'rgba(21, 101, 192, 0.5)',  # Azul (ideal para tanques o estructuras metálicas)
-    'rgba(198, 40, 40, 0.5)',   # Rojo suave (ideal para edificios de ladrillo)
-    'rgba(156, 39, 176, 0.5)',  # Púrpura
-    'rgba(255, 143, 0, 0.5)'    # Naranja
+    'rgba(100, 100, 100, 0.6)', 'rgba(46, 125, 50, 0.6)', 
+    'rgba(21, 101, 192, 0.6)', 'rgba(198, 40, 40, 0.6)', 
+    'rgba(156, 39, 176, 0.6)', 'rgba(255, 143, 0, 0.6)'
 ]
 
-# 1. Dibujar Sombras con colores distintos
+# 1. Dibujar Sombras (Con nombre explícito para la leyenda)
 for i, (nombre, datos) in enumerate(st.session_state.sombras.items()):
     az1, az2 = datos["az"]
     h1, h2 = datos["h"]
@@ -94,15 +85,14 @@ for i, (nombre, datos) in enumerate(st.session_state.sombras.items()):
         x=[az1, az1, az2, az2, az1],
         y=[0, h1, h2, 0, 0],
         fill="toself",
-        name=f"Sombra: {nombre}",
+        name=f"Sombra: {nombre}", # Esto es lo que aparece en la referencia
         fillcolor=color_asignado,
-        line=dict(color='rgba(0,0,0,0.6)', width=1.5),
+        line=dict(color='rgba(0,0,0,0.8)', width=1.5),
         hoverinfo="name"
     ))
 
-# 2. Analemas y etiquetas (Misma lógica anterior)
-horas_label = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
-for h in horas_label:
+# 2. Analemas y etiquetas
+for h in [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]:
     df_h = df_total[(df_total['hora'] == h) & (df_total['minuto'] == 0)].sort_index()
     if not df_h.empty:
         fig.add_trace(go.Scatter(
@@ -130,12 +120,24 @@ for g in grupos_meses:
     if not df_m.empty:
         fig.add_trace(go.Scatter(x=df_m['az_plot'], y=df_m['elevation'], mode='lines', name=g['nom'], line=dict(color=g['col'], width=3)))
 
-# --- ESTÉTICA Y EJES ---
+# --- AJUSTES DE EXPORTACIÓN (Para que no se corte al descargar) ---
 fig.update_layout(
     xaxis=dict(title="Acimut Solar [°] (-180=S, -90=E, 0=N, 90=O, 180=S)", range=[-180, 180], dtick=30, gridcolor='lightgray', zerolinecolor='black'),
     yaxis=dict(title="Elevación Solar [°]", range=[0, 90], dtick=10, gridcolor='lightgray'),
-    template="plotly_white", height=750,
-    legend=dict(title="<b>Referencias</b>", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+    template="plotly_white", 
+    height=750,
+    # Aumentamos el margen derecho y configuramos la leyenda
+    margin=dict(l=60, r=200, t=50, b=50),
+    legend=dict(
+        title="<b>REFERENCIAS</b>",
+        orientation="v",
+        yanchor="top", y=1,
+        xanchor="left", x=1.05, # La separa un poquito más del gráfico
+        font=dict(size=12),
+        bgcolor="rgba(255,255,255,0.5)",
+        bordercolor="Black",
+        borderwidth=1
+    )
 )
 
 st.plotly_chart(fig, use_container_width=True)
