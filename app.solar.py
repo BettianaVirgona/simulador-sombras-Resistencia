@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import pvlib
 import numpy as np
 
-# --- CONFIGURACIÓN DE PÁGINA ---
+# --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
 LATITUD = -27.45
@@ -16,92 +16,81 @@ st.title("☀️ Carta Solar Interactiva - Resistencia, Chaco")
 if 'sombras' not in st.session_state:
     st.session_state.sombras = []
 
-# --- SIDEBAR ---
+# --- SIDEBAR (IGUAL AL ANTERIOR) ---
 st.sidebar.header("📐 Configuración de Obstáculos")
 with st.sidebar.expander("Añadir Sombra", expanded=True):
     nombre = st.text_input("Nombre", "Obstáculo")
-    az_in = st.number_input("Azimut Inicial", value=-180, min_value=-180, max_value=180)
-    az_fi = st.number_input("Azimut Final", value=60, min_value=-180, max_value=180)
-    alt_h = st.number_input("Elevación Máxima", value=40)
-    
+    az_in = st.number_input("Azimut Inicial", value=-90)
+    az_fi = st.number_input("Azimut Final", value=-60)
+    alt_h = st.number_input("Elevación Máxima", value=30)
     if st.button("Dibujar Sombra"):
         st.session_state.sombras.append({"nom": nombre, "az": (az_in, az_fi), "alt": alt_h})
         st.rerun()
 
-if st.sidebar.button("Borrar todo"):
-    st.session_state.sombras = []
-    st.rerun()
-
-# --- CÁLCULO DE TRAYECTORIAS ---
+# --- CÁLCULO DE DATOS (MESES Y ANALEMAS) ---
 @st.cache_data
-def generar_curvas(lat, lon):
-    meses_nombres = ['Ene (21)', 'Feb (21)', 'Mar (21)', 'Abr (21)', 'May (21)', 'Jun (21)',
-                     'Jul (21)', 'Ago (21)', 'Sep (21)', 'Oct (21)', 'Nov (21)', 'Dic (21)']
+def obtener_todo_el_anio(lat, lon):
+    # Rango de todo el año para los analemas
+    tiempos_anio = pd.date_range(start='2024-01-01', end='2024-12-31 23:59', freq='60min', tz=ZONA_HORARIA)
+    sol_anio = pvlib.solarposition.get_solarposition(tiempos_anio, lat, lon)
+    sol_anio = sol_anio[sol_anio['elevation'] > 0]
     
-    # Colores aproximados a tu imagen
-    colores = ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', 
-               '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94']
+    # Normalizar Azimut para el "Pico" en 0 (Norte)
+    sol_anio['az_plot'] = np.where(sol_anio['azimuth'] > 180, sol_anio['azimuth'] - 360, sol_anio['azimuth'])
+    sol_anio['hora'] = sol_anio.index.hour
     
-    lineas = []
-    for i, nombre in enumerate(meses_nombres):
-        fecha = f'2024-{i+1:02d}-21'
-        tiempos = pd.date_range(start=f'{fecha} 05:00', end=f'{fecha} 20:00', freq='5min', tz=ZONA_HORARIA)
-        sol = pvlib.solarposition.get_solarposition(tiempos, lat, lon)
-        sol = sol[sol['elevation'] > -1] # Un margen para que llegue al horizonte
-        
-        # LÓGICA CLAVE PARA EL "PICO":
-        # pvlib: 0=N, 90=E, 180=S, 270=O.
-        # Queremos: 0=N, -90=E, -180=S, 90=O, 180=S.
-        az_plot = sol['azimuth'].copy()
-        az_plot = np.where(az_plot > 180, az_plot - 360, az_plot)
-        
-        # Ordenamos para que Plotly no trace líneas cruzadas
-        df_mes = pd.DataFrame({'x': az_plot, 'y': sol['elevation']}).sort_values('x')
-        
-        lineas.append({'x': df_mes['x'], 'y': df_mes['y'], 'nom': nombre, 'col': colores[i]})
-    return lineas
+    return sol_anio
 
-curvas = generar_curvas(LATITUD, LONGITUD)
+df_total = obtener_todo_el_anio(LATITUD, LONGITUD)
 
 # --- GRÁFICO ---
 fig = go.Figure()
 
-# 1. Sombras
+# 1. Dibujar Sombras
 for s in st.session_state.sombras:
     fig.add_trace(go.Scatter(
         x=[s['az'][0], s['az'][0], s['az'][1], s['az'][1], s['az'][0]],
         y=[0, s['alt'], s['alt'], 0, 0],
-        fill="toself", name=s['nom'], fillcolor='rgba(128, 128, 128, 0.5)',
-        line=dict(width=0), hoverinfo='name'
+        fill="toself", name=s['nom'], fillcolor='rgba(128, 128, 128, 0.4)',
+        line=dict(width=1, color="gray"), hoverinfo='name'
     ))
 
-# 2. Curvas de los meses
-for c in curvas:
-    fig.add_trace(go.Scatter(
-        x=c['x'], y=c['y'], mode='lines', name=c['nom'],
-        line=dict(color=c['col'], width=2)
-    ))
+# 2. Dibujar ANALEMAS (Las curvas de las horas)
+# Elegimos las horas más importantes para no saturar
+horas_analema = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+for h in horas_analema:
+    df_h = df_total[df_total['hora'] == h].sort_index()
+    if not df_h.empty:
+        fig.add_trace(go.Scatter(
+            x=df_h['az_plot'], y=df_h['elevation'],
+            mode='lines',
+            name=f"{h}:00 hs",
+            line=dict(color='rgba(100, 100, 255, 0.4)', width=1, dash='dot'),
+            hoverinfo='name'
+        ))
 
-# --- AJUSTES DE EJES (IDÉNTICO A LA FOTO) ---
+# 3. Dibujar Meses (Líneas gruesas)
+meses_nombres = {1:'Ene', 2:'Feb', 3:'Mar', 4:'Abr', 5:'May', 6:'Jun', 
+                 7:'Jul', 8:'Ago', 9:'Sep', 10:'Oct', 11:'Nov', 12:'Dic'}
+colores = ['#1f77b4', '#aec7e8', '#ff7f0e', '#ffbb78', '#2ca02c', '#98df8a', 
+           '#d62728', '#ff9896', '#9467bd', '#c5b0d5', '#8c564b', '#c49c94']
+
+for i in range(1, 13):
+    # Filtramos el día 21 de cada mes
+    df_mes = df_total[(df_total.index.month == i) & (df_total.index.day == 21)].sort_values('az_plot')
+    if not df_mes.empty:
+        fig.add_trace(go.Scatter(
+            x=df_mes['az_plot'], y=df_mes['elevation'],
+            mode='lines',
+            name=f"{meses_nombres[i]} (21)",
+            line=dict(color=colores[i-1], width=2.5)
+        ))
+
+# --- AJUSTES FINALES ---
 fig.update_layout(
-    xaxis=dict(
-        title="Acimut Solar [°] (-180=Sur, -90=Este, 0=Norte, 90=Oeste, 180=Sur)",
-        range=[-180, 180],
-        dtick=30,
-        gridcolor='lightgray',
-        showgrid=True,
-        zeroline=True,
-        zerolinecolor='black'
-    ),
-    yaxis=dict(
-        title="Elevación Solar [°]",
-        range=[0, 90],
-        dtick=10,
-        gridcolor='lightgray',
-        showgrid=True
-    ),
-    template="plotly_white",
-    height=700,
+    xaxis=dict(title="Acimut Solar [°]", range=[-180, 180], dtick=30, gridcolor='lightgray'),
+    yaxis=dict(title="Elevación Solar [°]", range=[0, 90], dtick=10, gridcolor='lightgray'),
+    template="plotly_white", height=750,
     legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
     margin=dict(l=60, r=160, t=50, b=50)
 )
