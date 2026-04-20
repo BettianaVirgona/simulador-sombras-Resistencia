@@ -5,7 +5,7 @@ import pvlib
 import numpy as np
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Analizador Solar UTN - Resistencia", layout="wide")
+st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
 # Datos geográficos de Resistencia, Chaco
 LATITUD = -27.45
