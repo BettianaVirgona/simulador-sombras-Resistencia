@@ -6,7 +6,7 @@ import numpy as np
 
 # --- INTERRUPTOR DE MANTENIMIENTO ---
 # Cambiá esto a False cuando quieras que la app sea visible
-en_construccion = True 
+en_construccion = False 
 
 if en_construccion:
     st.title("🚧 Sitio en Mantenimiento")
