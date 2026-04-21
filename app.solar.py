@@ -4,6 +4,17 @@ import plotly.graph_objects as go
 import pvlib
 import numpy as np
 
+# --- INTERRUPTOR DE MANTENIMIENTO ---
+# Cambiá esto a False cuando quieras que la app sea visible
+en_construccion = True 
+
+if en_construccion:
+    st.title("🚧 Sitio en Mantenimiento")
+    st.subheader("Estamos realizando mejoras técnicas en la Carta Solar.")
+    st.write("Volvé a visitarnos pronto. Atte: Equipo GITEA - UTN FRRe.")
+    
+    st.stop() 
+  
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
