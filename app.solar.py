@@ -5,7 +5,7 @@ import pvlib
 import numpy as np
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Analizador Solar Universal", layout="wide")
+st.set_page_config(page_title="Carta Solar Interactiva", layout="wide")
 
 # --- SIDEBAR: CONFIGURACIÓN UBICACIÓN ---
 st.sidebar.header("🌍 Ubicación Geográfica")
@@ -15,7 +15,7 @@ tz_user = st.sidebar.selectbox("Zona Horaria (UTC)",
                                options=["America/Argentina/Cordoba", "America/Argentina/Buenos_Aires", "Etc/GMT+3", "Etc/GMT+4", "Europe/Madrid"],
                                index=0)
 
-st.title("☀️ Carta Solar Cilíndrica Universal")
+st.title("☀️ Carta Solar Cilíndrica Interactiva")
 st.markdown(f"**Ubicación actual:** Lat {lat_user}, Lon {lon_user} | **Zona Horaria:** {tz_user}")
 
 # --- ESTADO DE LA SESIÓN (Sombras) ---
